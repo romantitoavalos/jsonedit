@@ -1,4 +1,4 @@
-package jsonEdit
+package jsonedit
 
 import (
 	"encoding/json"
