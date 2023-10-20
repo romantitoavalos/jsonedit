@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 
+	"reflect"
+
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -47,17 +49,13 @@ func (j *JSONFile) Update(Id string, data Item) (Items, error) {
 	if errRead != nil {
 		jsonRead = make(Items, 0)
 	}
-	id, _ := uuid.FromString(Id)
 
-	var itemFound *Item
-	for i, it := range jsonRead {
-		if it.Id == id {
-			itemFound = &jsonRead[i]
-			break
-		}
+	index := findItem(jsonRead, Id)
+	if index == -1 {
+		return make(Items, 0), errors.New("El Item no existe!!")
 	}
-	*itemFound = data
-	itemFound.Id = id
+
+	UpdateStruct(Id, &jsonRead[index], data)
 
 	errWrite := j.writeJSON(jsonRead)
 	if errWrite != nil {
@@ -90,18 +88,9 @@ func (j *JSONFile) Delete(Id string) (Items, error) {
 		return make(Items, 0), errors.New("No existe archivo")
 	}
 
-	id, _ := uuid.FromString(Id)
-
-	index := -1
-	for i, item := range jsonRead {
-		if item.Id == id {
-			index = i
-			break
-		}
-	}
-
+	index := findItem(jsonRead, Id)
 	if index == -1 {
-		return make(Items, 0), errors.New("Item not found")
+		return make(Items, 0), errors.New("El Item no existe!!")
 	}
 	jsonRead = append(jsonRead[:index], jsonRead[index+1:]...)
 
@@ -110,10 +99,6 @@ func (j *JSONFile) Delete(Id string) (Items, error) {
 		return make(Items, 0), errWrite
 	}
 	return jsonRead, nil
-}
-
-func getUniqueID() uuid.UUID {
-	return uuid.NewV4()
 }
 
 func (j *JSONFile) writeJSON(data Items) error {
@@ -130,4 +115,44 @@ func (j *JSONFile) writeJSON(data Items) error {
 
 	_, err = file.Write(jsonData)
 	return err
+}
+
+func getUniqueID() uuid.UUID {
+	return uuid.NewV4()
+}
+
+func findItem(json Items, Id string) int {
+	id, _ := uuid.FromString(Id)
+	index := -1
+	for i, item := range json {
+		if item.Id == id {
+			index = i
+			break
+		}
+	}
+	return index
+}
+
+func UpdateStruct(Id string, orig, new interface{}) {
+	id, _ := uuid.FromString(Id)
+
+	o := reflect.ValueOf(orig).Elem()
+	n := reflect.ValueOf(new)
+
+	t := o.Type()
+	fields := make([]string, t.NumField())
+
+	for i := 0; i < t.NumField(); i++ {
+		fields[i] = t.Field(i).Name
+	}
+
+	for _, name := range fields {
+		f := n.FieldByName(name)
+
+		if f.IsValid() {
+			o.FieldByName(name).Set(f)
+		}
+	}
+
+	o.FieldByName("Id").Set(reflect.ValueOf(id))
 }
